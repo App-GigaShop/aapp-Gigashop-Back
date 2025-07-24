@@ -1,11 +1,14 @@
 package com.example.ventaComputadora.webController;
 
-import com.example.ventaComputadora.domain.entity.EstadoOrden;
+import com.example.ventaComputadora.domain.entity.Producto;
+import com.example.ventaComputadora.domain.entity.enums.EstadoOrden;
 import com.example.ventaComputadora.domain.entity.Orden;
 import com.example.ventaComputadora.domain.entity.Pago;
 import com.example.ventaComputadora.infra.repository.OrdenRepository;
 import com.example.ventaComputadora.infra.repository.PagoRepository;
-import com.example.ventaComputadora.services.PagoService;
+import com.example.ventaComputadora.infra.repository.ProductoRepository;
+import com.example.ventaComputadora.s_client.InventarioClient;
+import com.example.ventaComputadora.services.implement.PagoService;
 import com.itextpdf.text.DocumentException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -21,6 +24,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Controlador REST para manejar las operaciones relacionadas con los pagos.
@@ -32,14 +37,10 @@ public class PagoController {
     private final PagoRepository pagoRepository;
     private final OrdenRepository ordenRepository;
     private final PagoService pagoService;
+    private final InventarioClient inventarioClient;
+    private final ProductoRepository productoRepository;
     private static final Logger logger = LoggerFactory.getLogger(PagoController.class);
 
-    /**
-     * Realiza un pago para una orden.
-     *
-     * @param pago Detalles del pago a realizar.
-     * @return El pago realizado.
-     */
     @PostMapping("/realizar")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<Pago> realizarPago(@RequestBody Pago pago) {
@@ -50,6 +51,7 @@ public class PagoController {
             throw new RuntimeException("La orden ya ha sido pagada.");
         }
 
+        // Calcular el monto total de la orden
         double montoTotal = orden.getProductos().stream()
                 .mapToDouble(producto -> producto.getPrecio())
                 .sum();
@@ -57,22 +59,25 @@ public class PagoController {
         pago.setMonto(montoTotal);
         pago.setEstado("COMPLETADO");
         pago.setFechaPago(LocalDateTime.now());
-
         Pago nuevoPago = pagoRepository.save(pago);
 
+        // Cambiar el estado de la orden a pagado
         orden.setEstado(EstadoOrden.PAGADO);
         ordenRepository.save(orden);
 
-        logger.info("Pago realizado con ID: {}", nuevoPago.getId());
+        // Actualizar el stock en inventario
+        orden.getProductos().forEach(producto -> {
+            if (producto.getExternalId() != null) {
+                inventarioClient.actualizarStockEnInventario(producto.getExternalId(), 1); // Reduce en 1 por producto
+            } else {
+                logger.warn("Producto sin externalId no se puede sincronizar con el inventario.");
+            }
+        });
+
         return ResponseEntity.ok(nuevoPago);
     }
 
-    /**
-     * Lista los pagos de una orden.
-     *
-     * @param ordenId ID de la orden.
-     * @return Lista de pagos de la orden.
-     */
+
     @GetMapping("/orden/{ordenId}")
     @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
     public ResponseEntity<List<Pago>> listarPagosPorOrden(@PathVariable Long ordenId) {

@@ -1,6 +1,7 @@
-package com.example.ventaComputadora.services;
+package com.example.ventaComputadora.services.implement;
 
 import com.example.ventaComputadora.domain.entity.*;
+import com.example.ventaComputadora.domain.entity.enums.EstadoOrden;
 import com.example.ventaComputadora.infra.repository.OrdenRepository;
 import com.example.ventaComputadora.infra.repository.PagoRepository;
 import com.itextpdf.text.*;
@@ -28,56 +29,7 @@ public class PagoService {
     private final OrdenRepository ordenRepository;
     private static final Logger logger = LoggerFactory.getLogger(PagoService.class);
 
-    /**
-     * Realiza un pago.
-     *
-     * @param pago Información del pago.
-     * @return El pago realizado.
-     */
-    @Transactional
-    public Pago realizarPago(Pago pago) {
-        Orden orden = ordenRepository.findById(pago.getOrden().getId())
-                .orElseThrow(() -> new RuntimeException("Orden no encontrada"));
 
-        if (orden.getEstado() == EstadoOrden.PAGADO) {
-            throw new RuntimeException("La orden ya ha sido pagada.");
-        }
-
-        double montoTotal = orden.getProductos().stream()
-                .mapToDouble(Producto::getPrecio)
-                .sum();
-
-        pago.setMonto(montoTotal);
-        pago.setEstado("COMPLETADO");
-        pago.setFechaPago(LocalDateTime.now());
-
-        Pago nuevoPago = pagoRepository.save(pago);
-
-        orden.setEstado(EstadoOrden.PAGADO);
-        ordenRepository.save(orden);
-
-        logger.info("Pago realizado con ID: {}", nuevoPago.getId());
-        return nuevoPago;
-    }
-
-    /**
-     * Lista los pagos de una orden.
-     *
-     * @param ordenId ID de la orden.
-     * @return Lista de pagos de la orden.
-     */
-    @Transactional(readOnly = true)
-    public List<Pago> listarPagosPorOrden(Long ordenId) {
-        return pagoRepository.findByOrdenId(ordenId);
-    }
-
-    /**
-     * Genera un comprobante de pago en formato PDF para una orden.
-     *
-     * @param ordenId ID de la orden.
-     * @return El comprobante de pago en un ByteArrayOutputStream.
-     * @throws DocumentException Si ocurre un error al generar el documento PDF.
-     */
     public ByteArrayOutputStream generarComprobantePorOrden(Long ordenId) throws DocumentException {
         List<Pago> pagos = pagoRepository.findByOrdenId(ordenId);
         if (pagos.isEmpty()) {
@@ -134,27 +86,6 @@ public class PagoService {
 
             document.add(productTable);
 
-            // Especificaciones del producto
-            if (!producto.getEspecificacionesDisponibles().isEmpty()) {
-                PdfPTable specsTable = new PdfPTable(2);
-                specsTable.setWidthPercentage(80);
-                specsTable.setSpacingBefore(5f);
-                specsTable.setWidths(new int[]{1, 2});
-
-                PdfPCell headerCell = new PdfPCell(new Phrase("Especificaciones", boldFont));
-                headerCell.setColspan(2);
-                headerCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-                headerCell.setPadding(5);
-                headerCell.setBackgroundColor(BaseColor.LIGHT_GRAY);
-                specsTable.addCell(headerCell);
-
-                for (ProductoEspecificacion especificacion : producto.getEspecificacionesDisponibles()) {
-                    specsTable.addCell(createCell(especificacion.getEspecificacion().getNombre(), normalFont, Element.ALIGN_LEFT));
-                    specsTable.addCell(createCell(String.valueOf(especificacion.getCantidad()), normalFont, Element.ALIGN_LEFT));
-                }
-
-                document.add(specsTable);
-            }
 
             document.add(new Paragraph(" ")); // Espacio en blanco entre productos
         }

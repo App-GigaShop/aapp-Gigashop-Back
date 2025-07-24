@@ -4,7 +4,7 @@ import com.example.ventaComputadora.domain.DTO.UsuarioDTO;
 import com.example.ventaComputadora.domain.entity.Usuario;
 import com.example.ventaComputadora.infra.security.LoginRequest;
 import com.example.ventaComputadora.infra.security.TokenResponse;
-import com.example.ventaComputadora.services.UsuarioService;
+import com.example.ventaComputadora.services.implement.UsuarioService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,24 +22,12 @@ import org.springframework.web.bind.annotation.*;
 public class UsuarioController {
     private final UsuarioService usuarioService;
 
-    /**
-     * Autentica a un usuario y devuelve un token JWT.
-     *hfghfhfhfhf
-     * @param request Solicitud de inicio de sesión.
-     * @return Respuesta con el token JWT.
-     */
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@RequestBody LoginRequest request) {
         TokenResponse token = usuarioService.login(request);
         return ResponseEntity.ok(token);
     }
 
-    /**
-     * Registra un nuevo usuario y devuelve un token JWT.
-     *
-     * @param usuario Información del usuario.
-     * @return Respuesta con el token JWT.
-     */
     @PostMapping(value = "/registrar", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Transactional
     public ResponseEntity<TokenResponse> registrar(@RequestBody Usuario usuario) {
